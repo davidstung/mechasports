@@ -1,0 +1,16 @@
+#######################################
+# Syntax Coloring Map: Pulse
+#######################################
+
+#######################################
+# Datatypes     KEYWORD1
+#######################################
+pulse_t         KEYWORD1
+
+#######################################
+# Methods and Functions
+#######################################
+InitPulses      KEYWORD2
+Pulse           KEYWORD2
+IsPulseFinished KEYWORD2
+EndPulse        KEYWORD2
