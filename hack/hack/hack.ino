@@ -141,7 +141,7 @@ void loop(void)
     Serial.println(orientation.pitch);
     Serial.println(F("; "));
   }
-  
+  // test comment
   /* Calculate the heading using the magnetometer */
   mag.getEvent(&mag_event);
   if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
