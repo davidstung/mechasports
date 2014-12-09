@@ -7,7 +7,14 @@
 #include <SoftwareSerial.h>
 #include <WirelessHEX69.h>
 #include <SPIFlash.h>
-#include <RFM69.h>
+#include <RFM69.h>    //get it here: https://www.github.com/lowpowerlab/rfm69
+#include <SPI.h>
+#include <LowPower.h> //get library from: https://github.com/lowpowerlab/lowpower
+#include <iostream>
+#include <string>
+// C program for implementation of ftoa()
+#include<stdio.h>
+#include<math.h>
 
 /* Assign a unique ID to the sensors */
 Adafruit_10DOF                dof   = Adafruit_10DOF();
@@ -25,6 +32,30 @@ Adafruit_GPS GPS(&mySerial);
 // Set to 'true' if you want to debug and listen to the raw GPS sentences. 
 #define GPSECHO  true
 uint32_t timer = millis();
+
+//*********************************************************************************************
+// *********** IMPORTANT SETTINGS - YOU MUST CHANGE/ONFIGURE TO FIT YOUR HARDWARE *************
+//*********************************************************************************************
+#define NETWORKID     100  //the same on all nodes that talk to each other
+#define RECEIVER      1    //unique ID of the gateway/receiver
+#define SENDER        2
+#define NODEID        SENDER  //change to "SENDER" if this is the sender node (the one with the button)
+//Match frequency to the hardware version of the radio on your Moteino (uncomment one):
+//#define FREQUENCY     RF69_433MHZ
+#define FREQUENCY     RF69_868MHZ
+//#define FREQUENCY     RF69_915MHZ
+#define ENCRYPTKEY    "sampleEncryptKey" //exactly the same 16 characters/bytes on all nodes!
+#define IS_RFM69HW    //uncomment only for RFM69HW! Remove/comment if you have RFM69W!
+//*********************************************************************************************
+
+#define SERIAL_BAUD   115200
+#define LED           9 //Moteinos have onboard LEDs on D9
+#define BUTTON_INT    1 //user button on interrupt 1 (D3)
+#define BUTTON_PIN    3 //user button on interrupt 1 (D3)
+RFM69 radio;
+
+char Long[12];
+char Lat[12];
 
 // this keeps track of whether we're using the interrupt
 // off by default!
@@ -55,6 +86,7 @@ void initSensors()
     Serial.println("Ooops, no BMP180 detected ... Check your wiring!");
     while(1);
   }
+  
 }
 
 /**************************************************************************/
@@ -70,7 +102,7 @@ void setup(void)
   initSensors();
   GPS.begin(9600);
   
-  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  GPS.sendCommand(/*PMTK_SET_NMEA_OUTPUT_RMCGGA*/ "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28");
   
     // Set the update rate
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);   // 1 Hz update rate
@@ -89,33 +121,58 @@ void setup(void)
   // Ask for firmware version
   mySerial.println(PMTK_Q_RELEASE);
   
+  //Sender init
+  radio.initialize(FREQUENCY,NODEID,NETWORKID);
+#ifdef IS_RFM69HW
+  radio.setHighPower(); //only for RFM69HW!
+#endif
+  radio.encrypt(ENCRYPTKEY);
+  char buff[50];
+  sprintf(buff, "\nListening at %d Mhz...", FREQUENCY==RF69_433MHZ ? 433 : FREQUENCY==RF69_868MHZ ? 868 : 915);
+  Serial.println(buff);
+  Serial.flush();
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED, OUTPUT);
+  attachInterrupt(BUTTON_INT, handleButton, FALLING);  
+  
 }
 
-// Interrupt is called once a millisecond, looks for any new GPS data, and stores it
-// SIGNAL(TIMER0_COMPA_vect) {
-//   char c = GPS.read();
-//   // if you want to debug, this is a good time to do it!
-// #ifdef UDR0
-//   if (GPSECHO)
-//     if (c) UDR0 = c;  
-//     // writing direct to UDR0 is much much faster than Serial.print 
-//     // but only one character can be written at a time. 
-// #endif
-// }
+//******** THIS IS INTERRUPT BASED DEBOUNCING FOR BUTTON ATTACHED TO D3 (INTERRUPT 1)
+#define FLAG_INTERRUPT 0x01
+volatile int mainEventFlags = 0;
+boolean buttonPressed = false;
+void handleButton()
+{
+  mainEventFlags |= FLAG_INTERRUPT;
+}
 
-// void useInterrupt(boolean v) {
-//   if (v) {
-//     // Timer0 is already used for millis() - we'll just interrupt somewhere
-//     // in the middle and call the "Compare A" function above
-//     OCR0A = 0xAF;
-//     TIMSK0 |= _BV(OCIE0A);
-//     usingInterrupt = true;
-//   } else {
-//     // do not call the interrupt function COMPA anymore
-//     TIMSK0 &= ~_BV(OCIE0A);
-//     usingInterrupt = false;
-//   }
-// }
+byte LEDSTATE=LOW; //LOW=0
+
+// Interrupt is called once a millisecond, looks for any new GPS data, and stores it
+SIGNAL(TIMER0_COMPA_vect) {
+  char c = GPS.read();
+  // if you want to debug, this is a good time to do it!
+#ifdef UDR0
+  if (GPSECHO)
+    if (c) UDR0 = c;  
+    // writing direct to UDR0 is much much faster than Serial.print 
+    // but only one character can be written at a time. 
+#endif
+}
+
+void useInterrupt(boolean v) {
+  if (v) {
+    // Timer0 is already used for millis() - we'll just interrupt somewhere
+    // in the middle and call the "Compare A" function above
+    OCR0A = 0xAF;
+    TIMSK0 |= _BV(OCIE0A);
+    usingInterrupt = true;
+  } else {
+    // do not call the interrupt function COMPA anymore
+    TIMSK0 &= ~_BV(OCIE0A);
+    usingInterrupt = false;
+  }
+}
 
 /**************************************************************************/
 /*!
@@ -141,7 +198,7 @@ void loop(void)
     Serial.println(orientation.pitch);
     Serial.println(F("; "));
   }
-  // test comment
+  
   /* Calculate the heading using the magnetometer */
   mag.getEvent(&mag_event);
   if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
@@ -173,61 +230,148 @@ void loop(void)
   
   Serial.println(F(""));
   delay(1000);
+  NullString();
+  //ftoa(GPS.latitude,Lat,5);
+  //ftoa(GPS.longitude,Long,6);
+  snprintf(Lat,12,"%f",GPS.latitude);
+  Serial.print(GPS.latitude);
+  Serial.print(" latitude ");
+  Serial.println(Lat);
+  
+  snprintf(Long,12,"%f",GPS.longitude);
+  Serial.print(GPS.longitude);
+  Serial.print(" longitude ");
+  Serial.println(Long);
+  
+  radio.sendWithRetry(RECEIVER,Lat,12);
+  delay(1000);
+  radio.sendWithRetry(RECEIVER,Long,12);
+  //radio.sendWithRetry(RECEIVER,"hi",2);
   
   // in case you are not using the interrupt above, you'll
   // need to 'hand query' the GPS, not suggested :(
-  // if (! usingInterrupt) {
-  //   // read data from the GPS in the 'main loop'
-  //   char c = GPS.read();
-  //   // if you want to debug, this is a good time to do it!
-  //   if (GPSECHO)
-  //     if (c) Serial.print(c);
-  // }
+  /*if (! usingInterrupt) {
+    // read data from the GPS in the 'main loop'
+    char c = GPS.read();
+    // if you want to debug, this is a good time to do it!
+    if (GPSECHO)
+      if (c) Serial.print(c);
+  }*/
   
-  // // if a sentence is received, we can check the checksum, parse it...
-  // if (GPS.newNMEAreceived()) {
-  //   // a tricky thing here is if we print the NMEA sentence, or data
-  //   // we end up not listening and catching other sentences! 
-  //   // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
-  //   //Serial.println(GPS.lastNMEA());   // this also sets the newNMEAreceived() flag to false
+  // if a sentence is received, we can check the checksum, parse it...
+  if (GPS.newNMEAreceived()) {
+    // a tricky thing here is if we print the NMEA sentence, or data
+    // we end up not listening and catching other sentences! 
+    // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
+    //Serial.println(GPS.lastNMEA());   // this also sets the newNMEAreceived() flag to false
   
-  //   if (!GPS.parse(GPS.lastNMEA()))   // this also sets the newNMEAreceived() flag to false
-  //     return;  // we can fail to parse a sentence in which case we should just wait for another
-  // }
+    if (!GPS.parse(GPS.lastNMEA()))   // this also sets the newNMEAreceived() flag to false
+      return;  // we can fail to parse a sentence in which case we should just wait for another
+  }
 
-  // // if millis() or timer wraps around, we'll just reset it
-  // if (timer > millis())  timer = millis();
+  // if millis() or timer wraps around, we'll just reset it
+  if (timer > millis())  timer = millis();
 
-  // // approximately every 2 seconds or so, print out the current stats
-  // if (millis() - timer > 2000) { 
-  //   timer = millis(); // reset the timer
+  // approximately every 2 seconds or so, print out the current stats
+  if (millis() - timer > 2000) { 
+    timer = millis(); // reset the timer
     
-  //   Serial.print("\nTime: ");
-  //   Serial.print(GPS.hour, DEC); Serial.print(':');
-  //   Serial.print(GPS.minute, DEC); Serial.print(':');
-  //   Serial.print(GPS.seconds, DEC); Serial.print('.');
-  //   Serial.println(GPS.milliseconds);
-  //   Serial.print("Date: ");
-  //   Serial.print(GPS.day, DEC); Serial.print('/');
-  //   Serial.print(GPS.month, DEC); Serial.print("/20");
-  //   Serial.println(GPS.year, DEC);
-  //   Serial.print("Fix: "); Serial.print((int)GPS.fix);
-  //   Serial.print(" quality: "); Serial.println((int)GPS.fixquality); 
-  //   if (GPS.fix) {
-  //     Serial.print("Location: ");
-  //     Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
-  //     Serial.print(", "); 
-  //     Serial.print(GPS.longitude, 4); Serial.println(GPS.lon);
-  //     Serial.print("Location (in degrees, works with Google Maps): ");
-  //     Serial.print(GPS.latitudeDegrees, 4);
-  //     Serial.print(", "); 
-  //     Serial.println(GPS.longitudeDegrees, 4);
+    Serial.print("\nTime: ");
+    Serial.print(GPS.hour, DEC); Serial.print(':');
+    Serial.print(GPS.minute, DEC); Serial.print(':');
+    Serial.print(GPS.seconds, DEC); Serial.print('.');
+    Serial.println(GPS.milliseconds);
+    Serial.print("Date: ");
+    Serial.print(GPS.day, DEC); Serial.print('/');
+    Serial.print(GPS.month, DEC); Serial.print("/20");
+    Serial.println(GPS.year, DEC);
+    Serial.print("Fix: "); Serial.print((int)GPS.fix);
+    Serial.print(" quality: "); Serial.println((int)GPS.fixquality); 
+    if (GPS.fix) {
+      Serial.print("Location: ");
+      Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
+      Serial.print(", "); 
+      Serial.print(GPS.longitude, 4); Serial.println(GPS.lon);
+      Serial.print("Location (in degrees, works with Google Maps): ");
+      Serial.print(GPS.latitudeDegrees, 4);
+      Serial.print(", "); 
+      Serial.println(GPS.longitudeDegrees, 4);
       
-  //     Serial.print("Speed (knots): "); Serial.println(GPS.speed);
-  //     Serial.print("Angle: "); Serial.println(GPS.angle);
-  //     Serial.print("Altitude: "); Serial.println(GPS.altitude);
-  //     Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
-  //   }
-  // }
+      Serial.print("Speed (knots): "); Serial.println(GPS.speed);
+      Serial.print("Angle: "); Serial.println(GPS.angle);
+      Serial.print("Altitude: "); Serial.println(GPS.altitude);
+      Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
+    }
+  }
   
+}
+
+void NullString(){
+  for (int i =0; i < 12; i++){
+    Long[i] = '\0';
+    Lat[i] = '\0';
+  }
+}
+
+// Converts a floating point number to string.
+void ftoa(float n, char *res, int afterpoint)
+{
+    // Extract integer part
+    int ipart = (int)n;
+    Serial.println("New Val");
+    Serial.println(n);
+    // Extract floating part
+    float fpart = n - (float)ipart;
+ 
+    // convert integer part to string
+    int i = intToStr(ipart, res, 0);
+ 
+    // check for display option after point
+    if (afterpoint != 0)
+    {
+        res[i] = '.';  // add dot
+ 
+        // Get the value of fraction part upto given no.
+        // of points after dot. The third parameter is needed
+        // to handle cases like 233.007
+        fpart = fpart * pow(10, afterpoint);
+ 
+        intToStr((int)fpart, res + i + 1, afterpoint);
+    }
+    Serial.println(res);
+}
+
+// reverses a string 'str' of length 'len'
+void reverse(char *str, int len)
+{
+    int i=0, j=len-1, temp;
+    while (i<j)
+    {
+        temp = str[i];
+        str[i] = str[j];
+        str[j] = temp;
+        i++; j--;
+    }
+}
+ 
+ // Converts a given integer x to string str[].  d is the number
+ // of digits required in output. If d is more than the number
+ // of digits in x, then 0s are added at the beginning.
+int intToStr(int x, char str[], int d)
+{
+    int i = 0;
+    while (x)
+    {
+        str[i++] = (x%10) + '0';
+        x = x/10;
+    }
+ 
+    // If number of digits required is more, then
+    // add 0s at the beginning
+    while (i < d)
+        str[i++] = '0';
+ 
+    reverse(str, i);
+    str[i] = '\0';
+    return i;
 }
