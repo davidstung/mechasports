@@ -51,6 +51,7 @@
 #include <SPI.h>
 #include <LowPower.h> //get library from: https://github.com/lowpowerlab/lowpower
 #include <SD.h>
+#include <Time.h>
 
 //*********************************************************************************************
 // *********** IMPORTANT SETTINGS - YOU MUST CHANGE/ONFIGURE TO FIT YOUR HARDWARE *************
@@ -72,6 +73,9 @@
 #define BUTTON_INT    1 //user button on interrupt 1 (D3)
 #define BUTTON_PIN    3 //user button on interrupt 1 (D3)
 RFM69 radio;
+float accX;
+float accY;
+float accZ;
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
@@ -110,35 +114,24 @@ void handleButton()
 
 byte LEDSTATE=LOW; //LOW=0
 void loop() {
-  //******** THIS IS INTERRUPT BASED DEBOUNCING FOR BUTTON ATTACHED TO D3 (INTERRUPT 1)
-  /*if (mainEventFlags & FLAG_INTERRUPT)
-  {
-    LowPower.powerDown(SLEEP_30MS, ADC_OFF, BOD_ON);
-    mainEventFlags &= ~FLAG_INTERRUPT;
-    if (!digitalRead(BUTTON_PIN)) {
-      buttonPressed=true;
-    }
-  }
-
-  if (buttonPressed)
-  {
-    Serial.println("Button pressed!");
-    buttonPressed = false;
-    if (radio.sendWithRetry(RECEIVER, "Hi", 2)) //target node Id, message as string or byte array, message length
-      Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
-  }*/
-  
   //check if something was received (could be an interrupt from the radio)
   if (radio.receiveDone())
   {
     //print message received to serial
     Serial.print('[');Serial.print(radio.SENDERID);Serial.print("] ");
-    Serial.print((char*)radio.DATA);
+    for (int i = 0; i < radio.DATALEN; i++){
+      Serial.print((char)radio.DATA[i]);
+    }
     Serial.print("   [RX_RSSI:");Serial.print(radio.RSSI);Serial.print("]");
     Serial.println();
+    ParseRadio();
+    Serial.println(accX);
+    Serial.println(accY);
+    Serial.println(accZ);
+    WriteAccData();
     
     //check if received message is 2 bytes long, and check if the message is specifically "Hi"
-    if (radio.DATALEN==5)
+    if (radio.DATALEN==15)
     {
    
       //check if sender wanted an ACK
@@ -158,9 +151,9 @@ void loop() {
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON); //sleep Moteino in low power mode (to save battery)
 }
 
-/*void WriteAccData(){
+void WriteAccData(){
   File dataFile = SD.open("data.txt", FILE_WRITE);
-  String dataString = String(AcX) + " " + String(AcY) + " " + String(AcZ) + " " + String(Tmp);
+  String dataString = String(accX) + " " + String(accY) + " " + String(accZ); // + " " + String(Tmp);
   if (dataFile){
     dataFile.println(dataString);
   }
@@ -168,4 +161,33 @@ void loop() {
     Serial.println("Failed\n");
   }
   dataFile.close();
-}*/
+}
+
+void ParseRadio(){
+  char X[5];
+  char Y[5];
+  char Z[5];
+  for (int i = 0; i < 5; i++){
+    if (radio.DATA[i] == 'X'){
+      X[i] = '\0';
+    }
+    else{
+      X[i] = radio.DATA[i];
+    }
+    if (radio.DATA[i+5] == 'Y'){
+      Y[i] = '\0';
+    }
+    else{
+      Y[i] = radio.DATA[i+5];
+    }
+    if (radio.DATA[i+10] == 'Z'){
+      Z[i] = '\0';
+    }
+    else{
+      Z[i] = radio.DATA[i+10];
+    }
+    accX = (float) atoi(X)/10.0;
+    accY = (float) atoi(Y)/10.0;
+    accZ = (float) atoi(Z)/10.0;
+  }
+}

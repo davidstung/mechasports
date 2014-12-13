@@ -142,23 +142,30 @@ void loop() {
   if (dof.accelGetOrientation(&accel_event, &orientation))
   {
     /* 'orientation' should have valid .roll and .pitch fields */
-    Serial.println(F("Roll: "));
+    /*Serial.println(F("Roll: "));
     Serial.println(orientation.roll);
-    Serial.println(F("; "));
+    Serial.println(F("; "));w
     Serial.println(F("Pitch: "));
     Serial.println(orientation.pitch);
-    Serial.println(F("; "));
+    Serial.println(F("; "));*/
+    Serial.print("X Accel: ");
+    Serial.print(accel_event.acceleration.x);
+    Serial.print(" Y Accel: ");
+    Serial.print(accel_event.acceleration.y);
+    Serial.print(" Z Accel: ");
+    Serial.print(accel_event.acceleration.z);
+    Serial.println();
   }
   // test comment
   /* Calculate the heading using the magnetometer */
-  mag.getEvent(&mag_event);
+  /*mag.getEvent(&mag_event);
   if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
   {
-    /* 'orientation' should have valid .heading data now */
+    // 'orientation' should have valid .heading data now 
     Serial.println(F("Heading: "));
     Serial.println(orientation.heading);
     Serial.println(F("; "));
-  }
+  }*/
 
   /* Calculate the altitude using the barometric pressure sensor */
   bmp.getEvent(&bmp_event);
@@ -182,31 +189,79 @@ void loop() {
   Serial.println(F(""));
   delay(100);
   
-  char Array[5];
+  /*char Array[4];
+  Array[0] = '\0';
+  Array[1] = '\0';
+  Array[2] = '\0';
+  Array[3] = '\0';
   
   int Roll = (int) (orientation.roll);
   if (Roll < 0){
-    Roll = Roll + 3600;
+    Roll = Roll + 360;
+    itoa(Roll, Array, 10);
   }
-  itoa(Roll, Array, 10);
-  Array[5] = 'R';
+  else{
+    itoa(Roll, Array, 10);
+  }
   
-  char pArray[5];
+  char pArray[4];
+  pArray[0] = '\0';
+  pArray[1] = '\0';
+  pArray[2] = '\0';
+  pArray[3] = '\0';
   
   int Pitch = (int) (orientation.pitch);
   if (Pitch < 0){
-    Pitch = Pitch + 3600;
+    Pitch = Pitch + 360;
+    itoa(Pitch, pArray, 10);
   }
-  itoa(Pitch, pArray, 10);
-  pArray[5] = 'P';
+  else{
+    itoa(Pitch, pArray, 10);
+  }
+    
   
+  char Data[8];
   
+  for (int i = 0; i < 4; i++){
+    if (Array[i] == '\0'){
+      Array[i] = 'R';
+    }
+    if (pArray[i] == '\0'){
+      pArray[i] = 'P';
+    }
+    Data[i] = Array[i];
+    Data[i+4] = pArray[i];
+  }*/
+  
+  int acX = (int)(accel_event.acceleration.x*10);
+  int acY = (int)(accel_event.acceleration.y*10);
+  int acZ = (int)(accel_event.acceleration.z*10);
+  char X[5], Z[5], Y[5];
+  char Data[15];
+  itoa(acX,X,10);
+  itoa(acY,Y,10);
+  itoa(acZ,Z,10);
+  for (int i = 0; i < 5; i++){
+    if (X[i] == '\0'){
+      X[i] = 'X';
+    }
+    if(Y[i] == '\0'){
+      Y[i] = 'Y';
+    }
+    if(Z[i] == '\0'){
+      Z[i] = 'Z';
+    }
+    Data[i] = X[i];
+    Data[i+5] = Y[i];
+    Data[i+10] = Z[i];
+  }
   
   //Array[3] = char(Roll - (Roll/1000)*1000 - (Roll/100)*100 - (Roll/10)*10);
   if (1 == 1)
   {
-    radio.sendWithRetry(RECEIVER, Array, 5); //target node Id, message as string or byte array, message length
-    radio.sendWithRetry(RECEIVER, pArray, 5);
+    //radio.sendWithRetry(RECEIVER, Data, 8); //target node Id, message as string or byte array, message length
+    radio.sendWithRetry(RECEIVER, Data, 15);
+    Serial.println(Data);
   }
   
   //radio.receiveDone(); //put radio in RX mode*/
