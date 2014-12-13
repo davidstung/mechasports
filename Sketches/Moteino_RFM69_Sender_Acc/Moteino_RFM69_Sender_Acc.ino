@@ -55,6 +55,8 @@
 #include <Adafruit_LSM303_U.h>
 #include <Adafruit_BMP085_U.h>
 #include <Adafruit_10DOF.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /* Assign a unique ID to the sensors */
 Adafruit_10DOF                dof   = Adafruit_10DOF();
@@ -62,6 +64,8 @@ Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
 Adafruit_LSM303_Mag_Unified   mag   = Adafruit_LSM303_Mag_Unified(30302);
 Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
 
+/* Update this with the correct SLP for accurate altitude measurements */
+float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 
 //*********************************************************************************************
 // *********** IMPORTANT SETTINGS - YOU MUST CHANGE/ONFIGURE TO FIT YOUR HARDWARE *************
@@ -119,25 +123,12 @@ void setup() {
   sprintf(buff, "\nListening at %d Mhz...", FREQUENCY==RF69_433MHZ ? 433 : FREQUENCY==RF69_868MHZ ? 868 : 915);
   Serial.println(buff);
   Serial.flush();
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(LED, OUTPUT);
-  attachInterrupt(BUTTON_INT, handleButton, FALLING);
   
   /* Initialise the sensors */
   initSensors();
   
 }
 
-//******** THIS IS INTERRUPT BASED DEBOUNCING FOR BUTTON ATTACHED TO D3 (INTERRUPT 1)
-#define FLAG_INTERRUPT 0x01
-volatile int mainEventFlags = 0;
-boolean buttonPressed = false;
-void handleButton()
-{
-  mainEventFlags |= FLAG_INTERRUPT;
-}
-
-byte LEDSTATE=LOW; //LOW=0
 void loop() {
 
   
@@ -189,20 +180,38 @@ void loop() {
   }
   
   Serial.println(F(""));
-  delay(1000);
+  delay(100);
+  
+  char Array[5];
+  
+  int Roll = (int) (orientation.roll);
+  if (Roll < 0){
+    Roll = Roll + 3600;
+  }
+  itoa(Roll, Array, 10);
+  Array[5] = 'R';
+  
+  char pArray[5];
+  
+  int Pitch = (int) (orientation.pitch);
+  if (Pitch < 0){
+    Pitch = Pitch + 3600;
+  }
+  itoa(Pitch, pArray, 10);
+  pArray[5] = 'P';
   
   
-  if (buttonPressed)
+  
+  //Array[3] = char(Roll - (Roll/1000)*1000 - (Roll/100)*100 - (Roll/10)*10);
+  if (1 == 1)
   {
-    Serial.println("Button pressed!");
-    buttonPressed = false;
-    if (radio.sendWithRetry(RECEIVER, "Hi", 2)) //target node Id, message as string or byte array, message length
-      Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
+    radio.sendWithRetry(RECEIVER, Array, 5); //target node Id, message as string or byte array, message length
+    radio.sendWithRetry(RECEIVER, pArray, 5);
   }
   
-  radio.receiveDone(); //put radio in RX mode*/
-  Serial.flush(); //make sure all serial data is clocked out before sleeping the MCU
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON); //sleep Moteino in low power mode (to save battery)
+  //radio.receiveDone(); //put radio in RX mode*/
+  //Serial.flush(); //make sure all serial data is clocked out before sleeping the MCU
+  //LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON); //sleep Moteino in low power mode (to save battery)
 }
 
 

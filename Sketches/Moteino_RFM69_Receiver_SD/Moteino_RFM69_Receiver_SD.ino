@@ -138,23 +138,19 @@ void loop() {
     Serial.println();
     
     //check if received message is 2 bytes long, and check if the message is specifically "Hi"
-    if (radio.DATALEN==2 && radio.DATA[0]=='H' && radio.DATA[1]=='i')
+    if (radio.DATALEN==5)
     {
-      if(LEDSTATE==LOW)
-        LEDSTATE=HIGH;
-      else LEDSTATE=LOW;
-      digitalWrite(LED, LEDSTATE);
-    }
    
-    //check if sender wanted an ACK
-    if (radio.ACKRequested())
-    {
-      radio.sendACK();
-      Serial.print(" - ACK sent");
+      //check if sender wanted an ACK
+      if (radio.ACKRequested())
+      {
+        radio.sendACK();
+        Serial.print(" - ACK sent");
+      }
+      
+      //Write to disk
+      //WriteAccData();
     }
-    
-    //Write to disk
-    WriteAccData();
   }
   
   radio.receiveDone(); //put radio in RX mode
@@ -162,7 +158,7 @@ void loop() {
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON); //sleep Moteino in low power mode (to save battery)
 }
 
-void WriteAccData(){
+/*void WriteAccData(){
   File dataFile = SD.open("data.txt", FILE_WRITE);
   String dataString = String(AcX) + " " + String(AcY) + " " + String(AcZ) + " " + String(Tmp);
   if (dataFile){
@@ -172,4 +168,4 @@ void WriteAccData(){
     Serial.println("Failed\n");
   }
   dataFile.close();
-}
+}*/
