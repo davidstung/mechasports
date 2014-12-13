@@ -50,7 +50,18 @@
 #include <RFM69.h>    //get it here: https://www.github.com/lowpowerlab/rfm69
 #include <SPI.h>
 #include <LowPower.h> //get library from: https://github.com/lowpowerlab/lowpower
-#include <SD.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_LSM303_U.h>
+#include <Adafruit_BMP085_U.h>
+#include <Adafruit_10DOF.h>
+
+/* Assign a unique ID to the sensors */
+Adafruit_10DOF                dof   = Adafruit_10DOF();
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
+Adafruit_LSM303_Mag_Unified   mag   = Adafruit_LSM303_Mag_Unified(30302);
+Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
+
 
 //*********************************************************************************************
 // *********** IMPORTANT SETTINGS - YOU MUST CHANGE/ONFIGURE TO FIT YOUR HARDWARE *************
@@ -58,7 +69,7 @@
 #define NETWORKID     100  //the same on all nodes that talk to each other
 #define RECEIVER      1    //unique ID of the gateway/receiver
 #define SENDER        2
-#define NODEID        RECEIVER  //change to "SENDER" if this is the sender node (the one with the button)
+#define NODEID        SENDER  //change to "SENDER" if this is the sender node (the one with the button)
 //Match frequency to the hardware version of the radio on your Moteino (uncomment one):
 //#define FREQUENCY     RF69_433MHZ
 #define FREQUENCY     RF69_868MHZ
@@ -72,6 +83,30 @@
 #define BUTTON_INT    1 //user button on interrupt 1 (D3)
 #define BUTTON_PIN    3 //user button on interrupt 1 (D3)
 RFM69 radio;
+
+
+void initSensors()
+{
+  if(!accel.begin())
+  {
+    /* There was a problem detecting the LSM303 ... check your connections */
+    Serial.println(F("Ooops, no LSM303 detected ... Check your wiring!"));
+    while(1);
+  }
+  if(!mag.begin())
+  {
+    /* There was a problem detecting the LSM303 ... check your connections */
+    Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
+    while(1);
+  }
+  if(!bmp.begin())
+  {
+    /* There was a problem detecting the BMP180 ... check your connections */
+    Serial.println("Ooops, no BMP180 detected ... Check your wiring!");
+    while(1);
+  }
+}
+
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
@@ -88,15 +123,9 @@ void setup() {
   pinMode(LED, OUTPUT);
   attachInterrupt(BUTTON_INT, handleButton, FALLING);
   
-    //Sd init
-  pinMode(10, OUTPUT);
-  // see if the card is present and can be initialized:
-  if (!SD.begin(4)) {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
-    return;
-  }
-  Serial.println("card initialized.");
+  /* Initialise the sensors */
+  initSensors();
+  
 }
 
 //******** THIS IS INTERRUPT BASED DEBOUNCING FOR BUTTON ATTACHED TO D3 (INTERRUPT 1)
@@ -110,66 +139,70 @@ void handleButton()
 
 byte LEDSTATE=LOW; //LOW=0
 void loop() {
-  //******** THIS IS INTERRUPT BASED DEBOUNCING FOR BUTTON ATTACHED TO D3 (INTERRUPT 1)
-  /*if (mainEventFlags & FLAG_INTERRUPT)
+
+  
+  sensors_event_t accel_event;
+  sensors_event_t mag_event;
+  sensors_event_t bmp_event;
+  sensors_vec_t   orientation;
+
+  /* Calculate pitch and roll from the raw accelerometer data */
+  accel.getEvent(&accel_event);
+  if (dof.accelGetOrientation(&accel_event, &orientation))
   {
-    LowPower.powerDown(SLEEP_30MS, ADC_OFF, BOD_ON);
-    mainEventFlags &= ~FLAG_INTERRUPT;
-    if (!digitalRead(BUTTON_PIN)) {
-      buttonPressed=true;
-    }
+    /* 'orientation' should have valid .roll and .pitch fields */
+    Serial.println(F("Roll: "));
+    Serial.println(orientation.roll);
+    Serial.println(F("; "));
+    Serial.println(F("Pitch: "));
+    Serial.println(orientation.pitch);
+    Serial.println(F("; "));
+  }
+  // test comment
+  /* Calculate the heading using the magnetometer */
+  mag.getEvent(&mag_event);
+  if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
+  {
+    /* 'orientation' should have valid .heading data now */
+    Serial.println(F("Heading: "));
+    Serial.println(orientation.heading);
+    Serial.println(F("; "));
   }
 
+  /* Calculate the altitude using the barometric pressure sensor */
+  bmp.getEvent(&bmp_event);
+  if (bmp_event.pressure)
+  {
+    /* Get ambient temperature in C */
+    float temperature;
+    bmp.getTemperature(&temperature);
+    /* Convert atmospheric pressure, SLP and temp to altitude    */
+    Serial.println(F("Alt: "));
+    Serial.println(bmp.pressureToAltitude(seaLevelPressure,
+                                        bmp_event.pressure,
+                                        temperature)); 
+    Serial.println(F(" m; "));
+    /* Display the temperature */
+    Serial.println(F("Temp: "));
+    Serial.println(temperature);
+    Serial.println(F(" C"));
+  }
+  
+  Serial.println(F(""));
+  delay(1000);
+  
+  
   if (buttonPressed)
   {
     Serial.println("Button pressed!");
     buttonPressed = false;
     if (radio.sendWithRetry(RECEIVER, "Hi", 2)) //target node Id, message as string or byte array, message length
       Blink(LED, 40, 3); //blink LED 3 times, 40ms between blinks
-  }*/
-  
-  //check if something was received (could be an interrupt from the radio)
-  if (radio.receiveDone())
-  {
-    //print message received to serial
-    Serial.print('[');Serial.print(radio.SENDERID);Serial.print("] ");
-    Serial.print((char*)radio.DATA);
-    Serial.print("   [RX_RSSI:");Serial.print(radio.RSSI);Serial.print("]");
-    Serial.println();
-    
-    //check if received message is 2 bytes long, and check if the message is specifically "Hi"
-    if (radio.DATALEN==2 && radio.DATA[0]=='H' && radio.DATA[1]=='i')
-    {
-      if(LEDSTATE==LOW)
-        LEDSTATE=HIGH;
-      else LEDSTATE=LOW;
-      digitalWrite(LED, LEDSTATE);
-    }
-   
-    //check if sender wanted an ACK
-    if (radio.ACKRequested())
-    {
-      radio.sendACK();
-      Serial.print(" - ACK sent");
-    }
-    
-    //Write to disk
-    WriteAccData();
   }
   
-  radio.receiveDone(); //put radio in RX mode
+  radio.receiveDone(); //put radio in RX mode*/
   Serial.flush(); //make sure all serial data is clocked out before sleeping the MCU
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON); //sleep Moteino in low power mode (to save battery)
 }
 
-void WriteAccData(){
-  File dataFile = SD.open("data.txt", FILE_WRITE);
-  String dataString = String(AcX) + " " + String(AcY) + " " + String(AcZ) + " " + String(Tmp);
-  if (dataFile){
-    dataFile.println(dataString);
-  }
-  else{
-    Serial.println("Failed\n");
-  }
-  dataFile.close();
-}
+
