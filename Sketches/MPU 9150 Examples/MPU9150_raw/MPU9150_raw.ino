@@ -36,19 +36,20 @@ THE SOFTWARE.
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
 #include "I2Cdev.h"
-#include "MPU6050.h"
+#include "MPU9150.h"
+#include "helper_3dmath.h"
 
 // class default I2C address is 0x68
 // specific I2C addresses may be passed as a parameter here
 // AD0 low = 0x68 (default for InvenSense evaluation board)
 // AD0 high = 0x69
-MPU6050 accelgyro;
+MPU9150 accelGyroMag;
 
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
 int16_t mx, my, mz;
 
-#define LED_PIN 13
+#define LED_PIN 9
 bool blinkState = false;
 
 void setup() {
@@ -62,25 +63,25 @@ void setup() {
 
     // initialize device
     Serial.println("Initializing I2C devices...");
-    accelgyro.initialize();
+    accelGyroMag.initialize();
 
     // verify connection
     Serial.println("Testing device connections...");
-    Serial.println(accelgyro.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+    Serial.println(accelGyroMag.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
 
     // configure Arduino LED for
     pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-    // read raw accel/gyro measurements from device
-    accelgyro.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
+    // read raw accel/gyro/mag measurements from device
+    accelGyroMag.getMotion9(&ax, &ay, &az, &gx, &gy, &gz, &mx, &my, &mz);
 
     // these methods (and a few others) are also available
-    //accelgyro.getAcceleration(&ax, &ay, &az);
-    //accelgyro.getRotation(&gx, &gy, &gz);
+    //accelGyroMag.getAcceleration(&ax, &ay, &az);
+    //accelGyroMag.getRotation(&gx, &gy, &gz);
 
-    // display tab-separated accel/gyro x/y/z values
+    // display tab-separated accel/gyro/mag x/y/z values
     Serial.print("a/g/m:\t");
     Serial.print(ax); Serial.print("\t");
     Serial.print(ay); Serial.print("\t");
@@ -90,9 +91,18 @@ void loop() {
     Serial.print(gz); Serial.print("\t");
     Serial.print(mx); Serial.print("\t");
     Serial.print(my); Serial.print("\t");
-    Serial.println(mz);
+    Serial.print(mz); Serial.print("\n");
+
+//    const float N = 256;
+//    float mag = mx*mx/N + my*my/N + mz*mz/N;
+//
+//    Serial.print(mag); Serial.print("\t");
+//    for (int i=0; i<mag; i++)
+//        Serial.print("*");
+//    Serial.print("\n");
 
     // blink LED to indicate activity
     blinkState = !blinkState;
     digitalWrite(LED_PIN, blinkState);
+    delay(50);
 }
