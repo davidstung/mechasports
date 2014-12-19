@@ -1,0 +1,9 @@
+Cam walked in a circle
+Stopped
+Cam sped walked in a circle
+Stopped
+Cam ran in a circle
+Stopped
+Cam jumped
+stopped
+Cam jumped
