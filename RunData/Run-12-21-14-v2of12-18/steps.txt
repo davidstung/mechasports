@@ -1,0 +1,1 @@
+David re-ran the experiment from 12-18 with a much smaller time write interval so we would have more samples.
