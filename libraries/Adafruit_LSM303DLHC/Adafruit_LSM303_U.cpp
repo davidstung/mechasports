@@ -163,6 +163,20 @@ bool Adafruit_LSM303_Accel_Unified::begin()
 }
 
 /**************************************************************************/
+/*!
+    @brief  Set gravity to 4 g and enable low pass filter
+*/
+/**************************************************************************/
+bool Adafruit_LSM303_Accel_Unified::UpdateSet()
+{
+  // Set to 4 g and enable high pass filter
+  write8(LSM303_ADDRESS_ACCEL, LSM303_REGISTER_ACCEL_CTRL_REG4_A, 0x18);
+  write8(LSM303_ADDRESS_ACCEL, LSM303_REGISTER_ACCEL_CTRL_REG2_A, 0x38);
+
+  return true;
+}
+
+/**************************************************************************/
 /*! 
     @brief  Gets the most recent sensor event
 */

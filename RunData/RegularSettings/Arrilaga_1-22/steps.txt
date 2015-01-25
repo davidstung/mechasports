@@ -1,0 +1,6 @@
+Samir:
+
+erg 1: 1 minute 220, 1 minute 207, 1 minute 154
+erg 2: 30 slow 30 on 30 slow 30 on
+tread 1: 1 minute walk, jog, run, sprint
+

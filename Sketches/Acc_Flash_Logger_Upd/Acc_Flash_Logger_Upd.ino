@@ -1,3 +1,5 @@
+
+
 #include <SPIFlash.h>    //get it here: https://github.com/LowPowerLab/SPIFlash
 #include <SPI.h>
 
@@ -57,7 +59,9 @@ void setup(){
   //FinishPages();
   //Serial.println("Memory Prepared!");
   accel.begin();
+  accel.UpdateSet();
   gyro.begin();
+  gyro.UpdateSet();
   
   Index = 0;
   Page = 0;
@@ -107,7 +111,7 @@ void loop()
     Index = 0;
     Page++;
   }
-  Serial.println(Page*10+Index);
+  //Serial.println(Page*10+Index);
   delay(20);
 }
 

@@ -92,6 +92,20 @@ Adafruit_L3GD20_Unified::Adafruit_L3GD20_Unified(int32_t sensorID) {
 /***************************************************************************
  PUBLIC FUNCTIONS
  ***************************************************************************/
+
+/**************************************************************************/
+/*!
+    Set update rate to 500 dps and set high-pass filter to be active
+*/
+/**************************************************************************/
+
+void Adafruit_L3GD20_Unified::UpdateSet()
+{
+        write8(GYRO_REGISTER_CTRL_REG4, 0x20);
+        write8(GYRO_REGISTER_CTRL_REG5, 0x10);
+        write8(GYRO_REGISTER_CTRL_REG2, 0x05);
+
+}
  
 /**************************************************************************/
 /*!
